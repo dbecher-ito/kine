@@ -132,7 +132,7 @@ func configureDBConnHandling(db *sql.DB, maxIdle int, maxOpen int, maxLifeTime t
 	db.SetConnMaxLifetime(maxLifeTime)
 }
 
-func createDBConnCallback(conf DBConnConfig) func(db *sql.DB) {
+func createDBConnCallback(conf DBConnConfig) ConfigureDBConnCallback {
 	return func(db *sql.DB) {
 		db.SetMaxIdleConns(conf.MaxIdle)
 		db.SetMaxOpenConns(conf.MaxOpen)
