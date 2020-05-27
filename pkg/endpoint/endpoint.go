@@ -2,10 +2,12 @@ package endpoint
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rancher/kine/pkg/drivers/dqlite"
@@ -27,11 +29,18 @@ const (
 	PostgresBackend = "postgres"
 )
 
+type DBConnConfig struct {
+	MaxIdle     int
+	MaxOpen     int
+	MaxLifeTime time.Duration
+}
+
 type Config struct {
 	GRPCServer *grpc.Server
 	Listener   string
 	Endpoint   string
 
+	DBConnConfig DBConnConfig
 	tls.Config
 }
 
@@ -40,6 +49,8 @@ type ETCDConfig struct {
 	TLSConfig   tls.Config
 	LeaderElect bool
 }
+
+type ConfigureDBConnCallback func(db *sql.DB)
 
 func Listen(ctx context.Context, config Config) (ETCDConfig, error) {
 	driver, dsn := ParseStorageEndpoint(config.Endpoint)
@@ -115,22 +126,37 @@ func grpcServer(config Config) *grpc.Server {
 	return grpc.NewServer()
 }
 
+func configureDBConnHandling(db *sql.DB, maxIdle int, maxOpen int, maxLifeTime time.Duration) {
+	db.SetMaxIdleConns(maxIdle)
+	db.SetMaxOpenConns(maxOpen)
+	db.SetConnMaxLifetime(maxLifeTime)
+}
+
+func createDBConnCallback(conf DBConnConfig) func(db *sql.DB) {
+	return func(db *sql.DB) {
+		db.SetMaxIdleConns(conf.MaxIdle)
+		db.SetMaxOpenConns(conf.MaxOpen)
+		db.SetConnMaxLifetime(conf.MaxLifeTime)
+	}
+}
+
 func getKineStorageBackend(ctx context.Context, driver, dsn string, cfg Config) (bool, server.Backend, error) {
 	var (
-		backend     server.Backend
-		leaderElect = true
-		err         error
+		backend                 server.Backend
+		leaderElect             = true
+		err                     error
+		configureDBConnCallback = createDBConnCallback(cfg.DBConnConfig)
 	)
 	switch driver {
 	case SQLiteBackend:
 		leaderElect = false
-		backend, err = sqlite.New(ctx, dsn)
+		backend, err = sqlite.New(ctx, dsn, configureDBConnCallback)
 	case DQLiteBackend:
 		backend, err = dqlite.New(ctx, dsn)
 	case PostgresBackend:
-		backend, err = pgsql.New(ctx, dsn, cfg.Config)
+		backend, err = pgsql.New(ctx, dsn, cfg.Config, configureDBConnCallback)
 	case MySQLBackend:
-		backend, err = mysql.New(ctx, dsn, cfg.Config)
+		backend, err = mysql.New(ctx, dsn, cfg.Config, configureDBConnCallback)
 	default:
 		return false, nil, fmt.Errorf("storage backend is not defined")
 	}

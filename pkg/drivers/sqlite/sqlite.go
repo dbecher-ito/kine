@@ -11,6 +11,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"github.com/rancher/kine/pkg/drivers/generic"
+	"github.com/rancher/kine/pkg/endpoint"
 	"github.com/rancher/kine/pkg/logstructured"
 	"github.com/rancher/kine/pkg/logstructured/sqllog"
 	"github.com/rancher/kine/pkg/server"
@@ -39,12 +40,12 @@ var (
 	}
 )
 
-func New(ctx context.Context, dataSourceName string) (server.Backend, error) {
-	backend, _, err := NewVariant(ctx, "sqlite3", dataSourceName)
+func New(ctx context.Context, dataSourceName string, configureConnHandling endpoint.ConfigureDBConnCallback) (server.Backend, error) {
+	backend, _, err := NewVariant(ctx, "sqlite3", dataSourceName, configureConnHandling)
 	return backend, err
 }
 
-func NewVariant(ctx context.Context, driverName, dataSourceName string) (server.Backend, *generic.Generic, error) {
+func NewVariant(ctx context.Context, driverName, dataSourceName string, configureConnHandling endpoint.ConfigureDBConnCallback) (server.Backend, *generic.Generic, error) {
 	if dataSourceName == "" {
 		if err := os.MkdirAll("./db", 0700); err != nil {
 			return nil, nil, err
@@ -85,6 +86,8 @@ func NewVariant(ctx context.Context, driverName, dataSourceName string) (server.
 	//if err := setup(dialect.DB); err != nil {
 	//	return nil, nil, errors.Wrap(err, "setup db")
 	//}
+
+	configureConnHandling(dialect.DB)
 
 	dialect.Migrate(context.Background())
 	return logstructured.New(sqllog.New(dialect)), dialect, nil

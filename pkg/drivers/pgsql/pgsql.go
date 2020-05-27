@@ -3,6 +3,7 @@ package pgsql
 import (
 	"context"
 	"database/sql"
+	"github.com/rancher/kine/pkg/endpoint"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -41,7 +42,7 @@ var (
 	createDB = "create database "
 )
 
-func New(ctx context.Context, dataSourceName string, tlsInfo tls.Config) (server.Backend, error) {
+func New(ctx context.Context, dataSourceName string, tlsInfo tls.Config, configureConnectionHandling endpoint.ConfigureDBConnCallback) (server.Backend, error) {
 	parsedDSN, err := prepareDSN(dataSourceName, tlsInfo)
 	if err != nil {
 		return nil, err
@@ -61,6 +62,8 @@ func New(ctx context.Context, dataSourceName string, tlsInfo tls.Config) (server
 		}
 		return err
 	}
+
+	configureConnectionHandling(dialect.DB)
 
 	if err := setup(dialect.DB); err != nil {
 		return nil, err

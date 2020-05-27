@@ -4,6 +4,7 @@ import (
 	"context"
 	cryptotls "crypto/tls"
 	"database/sql"
+	"github.com/rancher/kine/pkg/endpoint"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/rancher/kine/pkg/drivers/generic"
@@ -40,7 +41,7 @@ var (
 	createDB    = "create database if not exists "
 )
 
-func New(ctx context.Context, dataSourceName string, tlsInfo tls.Config) (server.Backend, error) {
+func New(ctx context.Context, dataSourceName string, tlsInfo tls.Config, configureConnectionHandling endpoint.ConfigureDBConnCallback) (server.Backend, error) {
 	tlsConfig, err := tlsInfo.ClientConfig()
 	if err != nil {
 		return nil, err
@@ -70,6 +71,9 @@ func New(ctx context.Context, dataSourceName string, tlsInfo tls.Config) (server
 		}
 		return err
 	}
+
+	configureConnectionHandling(dialect.DB)
+
 	if err := setup(dialect.DB); err != nil {
 		return nil, err
 	}
